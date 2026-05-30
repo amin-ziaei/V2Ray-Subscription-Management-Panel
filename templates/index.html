@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V2Ray Subscription Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-4 md:p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6 text-indigo-400 text-center">V2Ray Subscription Management Panel</h1>
+
+        <div class="bg-gray-800 p-4 rounded-lg mb-8 border border-gray-700 shadow-md">
+            <label class="block text-sm font-medium text-gray-400 mb-2">Your Live Subscription URL (Add this to your V2Ray clients):</label>
+            <div class="flex gap-2">
+                <input type="text" readonly value="{{ sub_url }}" id="subUrl" class="w-full bg-gray-700 text-indigo-300 p-2 rounded border border-gray-600 font-mono text-sm">
+                <button onclick="copyLink()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded font-medium text-sm transition">Copy</button>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-lg mb-8 border border-gray-700 shadow-md">
+            <h2 class="text-xl font-semibold mb-4 text-gray-200">Add New Configuration</h2>
+            <form action="/add" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Remark / Location Name:</label>
+                    <input type="text" name="remark" required placeholder="e.g., Germany - Server 1" class="w-full bg-gray-700 p-2 rounded border border-gray-600 text-white focus:outline-none focus:border-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Config Link (vless://, vmess://, ss://):</label>
+                    <textarea name="config_link" required rows="3" placeholder="vless://..." class="w-full bg-gray-700 p-2 rounded border border-gray-600 font-mono text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
+                </div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-2.5 rounded font-medium transition">Save Configuration</button>
+            </form>
+        </div>
+
+        <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-md">
+            <h2 class="text-xl font-semibold mb-4 text-gray-200">Active Configurations ({{ configs|length }})</h2>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                            <th class="pb-3 pl-2">Remark</th>
+                            <th class="pb-3 hidden md:table-cell">Type</th>
+                            <th class="pb-3 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        {% for config in configs %}
+                        <tr class="text-sm hover:bg-gray-750 transition">
+                            <td class="py-3.5 pl-2 font-medium text-gray-300">{{ config.remark }}</td>
+                            <td class="py-3.5 hidden md:table-cell font-mono text-gray-400">
+                                {% if config.config_link.startswith('vless://') %} VLESS
+                                {% elif config.config_link.startswith('vmess://') %} VMESS
+                                {% elif config.config_link.startswith('ss://') %} Shadowsocks
+                                {% else %} Custom
+                                {% endif %}
+                            </td>
+                            <td class="py-3.5 text-center">
+                                <a href="/delete/{{ config.id }}" onclick="return confirm('Are you sure you want to delete this config?')" class="text-red-400 hover:text-red-500 font-medium transition">Delete</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if not configs %}
+                        <tr>
+                            <td colspan="3" class="py-8 text-center text-gray-500">No active configurations found. Add one above!</td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function copyLink() {
+            var copyText = document.getElementById("subUrl");
+            copyText.select();
+            navigator.clipboard.writeText(copyText.value);
+            alert("Subscription URL copied to clipboard!");
+        }
+    </script>
+</body>
+</html>

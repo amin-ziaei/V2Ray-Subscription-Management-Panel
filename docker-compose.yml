@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  v2ray-sub:
+    build: .
+    container_name: v2ray_sub_panel
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=admin123
+    restart: always
