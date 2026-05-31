@@ -2,6 +2,10 @@
 
 A FastAPI-based web panel for managing V2Ray subscription configurations.
 
+## Screenshot
+
+![V2Ray Subscription Management Panel](sc.png)
+
 ## 🔧 Improvements Made
 
 ✅ **Fixed import error** - Corrected `fastapi.templatetools` to `fastapi.templating`
