@@ -9,7 +9,8 @@ RUN apk add --no-cache --virtual .build-deps gcc musl-dev && \
     uvicorn==0.28.0 \
     jinja2==3.1.3 \
     python-multipart==0.0.9 \
-    python-dotenv==1.0.0 && \
+    python-dotenv==1.0.0 \
+    qrcode[pil]==7.4.2 && \
     apk del .build-deps
 
 COPY main.py .

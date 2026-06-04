@@ -3,93 +3,283 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>V2Ray Subscription Manager</title>
+    <title>V2Ray Subscription Management Panel</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass { background: rgba(15, 23, 42, 0.74); backdrop-filter: blur(18px); }
+        .config-card[open] summary .chevron { transform: rotate(180deg); }
+    </style>
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-4 md:p-8">
-    <div class="max-w-4xl mx-auto">
-        <div class="flex flex-col items-center gap-4 mb-8 text-center">
-            <div class="flex items-center justify-center h-16 w-16 rounded-2xl bg-gradient-to-br from-cyan-400 via-sky-500 to-indigo-600 shadow-lg shadow-sky-500/25 ring-1 ring-white/10">
-                <svg viewBox="0 0 64 64" class="h-9 w-9 text-white" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <path d="M14 24L32 14L50 24V40L32 50L14 40V24Z" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/>
-                    <path d="M24 30L32 26L40 30V38L32 42L24 38V30Z" fill="currentColor" opacity="0.9"/>
-                    <path d="M32 14V26M14 24L24 30M50 24L40 30M14 40L24 38M50 40L40 38M32 50V42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </div>
-            <div>
-                <p class="text-xs uppercase tracking-[0.35em] text-cyan-300 mb-2">V2Ray</p>
-                <h1 class="text-3xl md:text-4xl font-bold text-indigo-300">Subscription Management Panel</h1>
-            </div>
-        </div>
-
-        <div class="bg-gray-800 p-4 rounded-lg mb-8 border border-gray-700 shadow-md">
-            <label class="block text-sm font-medium text-gray-400 mb-2">Your Live Subscription URL (Add this to your V2Ray clients):</label>
-            <div class="flex gap-2">
-                <input type="text" readonly value="{{ sub_url }}" id="subUrl" class="w-full bg-gray-700 text-indigo-300 p-2 rounded border border-gray-600 font-mono text-sm">
-                <button onclick="copyLink()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded font-medium text-sm transition">Copy</button>
-            </div>
-        </div>
-
-        <div class="bg-gray-800 p-6 rounded-lg mb-8 border border-gray-700 shadow-md">
-            <h2 class="text-xl font-semibold mb-4 text-gray-200">Add New Configuration</h2>
-            <form action="/add" method="POST" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Remark / Location Name:</label>
-                    <input type="text" name="remark" required placeholder="e.g., Germany - Server 1" class="w-full bg-gray-700 p-2 rounded border border-gray-600 text-white focus:outline-none focus:border-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-1">Config Link (vless://, vmess://, ss://):</label>
-                    <textarea name="config_link" required rows="3" placeholder="vless://..." class="w-full bg-gray-700 p-2 rounded border border-gray-600 font-mono text-sm text-white focus:outline-none focus:border-indigo-500"></textarea>
-                </div>
-                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 py-2.5 rounded font-medium transition">Save Configuration</button>
-            </form>
-        </div>
-
-        <div class="bg-gray-800 p-6 rounded-lg border border-gray-700 shadow-md">
-            <h2 class="text-xl font-semibold mb-4 text-gray-200">Active Configurations ({{ configs|length }})</h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 pl-2">Remark</th>
-                            <th class="pb-3 hidden md:table-cell">Type</th>
-                            <th class="pb-3 text-center">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700">
-                        {% for config in configs %}
-                        <tr class="text-sm hover:bg-gray-750 transition">
-                            <td class="py-3.5 pl-2 font-medium text-gray-300">{{ config.remark }}</td>
-                            <td class="py-3.5 hidden md:table-cell font-mono text-gray-400">
-                                {% if config.config_link.startswith('vless://') %} VLESS
-                                {% elif config.config_link.startswith('vmess://') %} VMESS
-                                {% elif config.config_link.startswith('ss://') %} Shadowsocks
-                                {% else %} Custom
-                                {% endif %}
-                            </td>
-                            <td class="py-3.5 text-center">
-                                <a href="/delete/{{ config.id }}" onclick="return confirm('Are you sure you want to delete this config?')" class="text-red-400 hover:text-red-500 font-medium transition">Delete</a>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                        {% if not configs %}
-                        <tr>
-                            <td colspan="3" class="py-8 text-center text-gray-500">No active configurations found. Add one above!</td>
-                        </tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+<body class="min-h-screen bg-slate-950 text-slate-100 font-sans">
+    <div class="fixed inset-0 -z-10 overflow-hidden">
+        <div class="absolute -top-32 left-1/4 h-96 w-96 rounded-full bg-cyan-500/20 blur-3xl"></div>
+        <div class="absolute top-20 right-0 h-[30rem] w-[30rem] rounded-full bg-indigo-600/20 blur-3xl"></div>
+        <div class="absolute bottom-0 left-0 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl"></div>
     </div>
 
+    <div class="max-w-7xl mx-auto p-4 md:p-8">
+        <header class="mb-8 overflow-hidden rounded-3xl border border-white/10 glass shadow-2xl">
+            <div class="grid gap-8 p-6 md:p-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
+                <div>
+                    <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-cyan-200">
+                        V2Ray Manager
+                    </div>
+                    <h1 class="text-3xl md:text-5xl font-black tracking-tight text-white">Subscription Management Panel</h1>
+                    <p class="mt-4 max-w-2xl text-slate-300">Manage configs, groups, QR codes, bulk actions, and separated subscription links from one clean dashboard.</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <p class="text-sm text-slate-400">Total</p>
+                        <p class="mt-2 text-3xl font-bold text-white">{{ stats.total }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                        <p class="text-sm text-emerald-200">Active</p>
+                        <p class="mt-2 text-3xl font-bold text-emerald-100">{{ stats.active }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-amber-400/20 bg-amber-400/10 p-4">
+                        <p class="text-sm text-amber-200">Inactive</p>
+                        <p class="mt-2 text-3xl font-bold text-amber-100">{{ stats.inactive }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-indigo-400/20 bg-indigo-400/10 p-4">
+                        <p class="text-sm text-indigo-200">Groups</p>
+                        <p class="mt-2 text-3xl font-bold text-indigo-100">{{ stats.groups }}</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="grid gap-6 lg:grid-cols-[380px_1fr]">
+            <aside class="space-y-6">
+                <section class="rounded-3xl border border-white/10 glass p-5 shadow-xl">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h2 class="text-lg font-bold text-white">Global Subscription</h2>
+                        <span class="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-semibold text-indigo-200">All active</span>
+                    </div>
+                    <div class="rounded-2xl bg-white p-3 mx-auto mb-4 w-fit">
+                        <img src="/qr/sub" alt="Subscription QR" class="h-40 w-40">
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" readonly value="{{ sub_url }}" id="subUrl" class="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-indigo-200" dir="ltr">
+                        <button onclick="copyValue('subUrl')" class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold hover:bg-indigo-500">Copy</button>
+                    </div>
+                </section>
+
+                <section class="rounded-3xl border border-white/10 glass p-5 shadow-xl">
+                    <h2 class="mb-4 text-lg font-bold text-white">Database Backup</h2>
+                    <div class="space-y-4">
+                        <a href="/backup" class="block w-full rounded-xl bg-cyan-600 py-3 text-center text-sm font-bold text-white hover:bg-cyan-500">Download Backup</a>
+                        <form action="/restore" method="POST" enctype="multipart/form-data" class="space-y-3" onsubmit="return confirm('Restore this database backup? Current data will be replaced and an automatic pre-restore backup will be created.')">
+                            <label class="block text-sm text-slate-300">Restore `.db` file</label>
+                            <input type="file" name="backup_file" accept=".db" required class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-700 file:px-3 file:py-2 file:text-white">
+                            <button type="submit" class="w-full rounded-xl bg-amber-600 py-3 text-sm font-bold text-white hover:bg-amber-500">Restore Backup</button>
+                        </form>
+                    </div>
+                </section>
+
+                <section class="rounded-3xl border border-white/10 glass p-5 shadow-xl">
+                    <h2 class="mb-4 text-lg font-bold text-white">Add Configurations</h2>
+                    <form action="/add" method="POST" class="space-y-4">
+                        <div>
+                            <label class="mb-1 block text-sm text-slate-300">Panel Remark</label>
+                            <input type="text" name="remark" required placeholder="e.g., Germany" class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm text-slate-300">Group</label>
+                            <input type="text" name="group_name" list="groupList" value="Default" placeholder="Default" class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-sm text-slate-300">Configs</label>
+                            <textarea name="config_link" required rows="7" placeholder="Enter one config per line" class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white outline-none focus:border-cyan-400" dir="ltr"></textarea>
+                        </div>
+                        <button type="submit" class="w-full rounded-xl bg-emerald-600 py-3 font-bold text-white hover:bg-emerald-500">Save Configurations</button>
+                    </form>
+                </section>
+
+                <section class="rounded-3xl border border-white/10 glass p-5 shadow-xl">
+                    <h2 class="mb-4 text-lg font-bold text-white">Group Subscriptions</h2>
+                    <div class="space-y-3">
+                        {% for group_link in group_links %}
+                        <div class="rounded-2xl border border-slate-700/70 bg-slate-950/70 p-3">
+                            <div class="mb-2 flex items-center justify-between gap-2">
+                                <strong class="truncate text-sm text-white">{{ group_link.name }}</strong>
+                                <span class="rounded-full bg-cyan-500/15 px-2 py-1 text-[11px] text-cyan-200">Group</span>
+                            </div>
+                            <div class="mb-3 flex justify-center rounded-xl bg-white p-2">
+                                <img src="{{ group_link.qr_url }}" alt="{{ group_link.name }} QR" class="h-28 w-28">
+                            </div>
+                            <div class="flex gap-2">
+                                <input id="groupSub{{ loop.index }}" type="text" readonly value="{{ group_link.url }}" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-900 p-2 font-mono text-[11px] text-cyan-200" dir="ltr">
+                                <button onclick="copyValue('groupSub{{ loop.index }}')" class="rounded-lg bg-slate-700 px-3 text-xs font-semibold hover:bg-slate-600">Copy</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if not group_links %}
+                        <p class="rounded-2xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">No groups yet.</p>
+                        {% endif %}
+                    </div>
+                </section>
+            </aside>
+
+            <section class="space-y-6">
+                <section class="rounded-3xl border border-white/10 glass p-5 shadow-xl">
+                    <div class="grid gap-3 md:grid-cols-[1fr_180px_180px]">
+                        <input id="searchInput" type="search" placeholder="Search remarks, groups, protocols, or config links..." class="rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                        <select id="groupFilter" class="rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                            <option value="all">All groups</option>
+                            {% for group in groups %}<option value="{{ group }}">{{ group }}</option>{% endfor %}
+                        </select>
+                        <select id="statusFilter" class="rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                            <option value="all">All statuses</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                    </div>
+                </section>
+
+                <form action="/bulk" method="POST" id="bulkForm" class="rounded-3xl border border-white/10 glass p-5 shadow-xl">
+                    <div class="mb-5 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Configurations</h2>
+                            <p class="mt-1 text-sm text-slate-400">Select configs to enable, disable, delete, move, or replace host/IP in bulk.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <a href="/check-all" class="rounded-xl bg-cyan-600 px-3 py-2 text-sm font-semibold hover:bg-cyan-500">Check all latency</a>
+                            <button type="button" onclick="setAllCheckboxes(true)" class="rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600">Select all</button>
+                            <button type="button" onclick="setAllCheckboxes(false)" class="rounded-xl bg-slate-700 px-3 py-2 text-sm font-semibold hover:bg-slate-600">Clear</button>
+                            <input type="text" name="bulk_group_name" list="groupList" placeholder="Group or new host/IP" class="w-44 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400">
+                            <button name="action" value="move" class="rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold hover:bg-indigo-500">Move</button>
+                            <button name="action" value="replace_host" onclick="return confirm('Replace host/IP for selected configurations?')" class="rounded-xl bg-fuchsia-600 px-3 py-2 text-sm font-semibold hover:bg-fuchsia-500">Replace Host/IP</button>
+                            <button name="action" value="enable" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold hover:bg-emerald-500">Enable</button>
+                            <button name="action" value="disable" class="rounded-xl bg-amber-600 px-3 py-2 text-sm font-semibold hover:bg-amber-500">Disable</button>
+                            <button name="action" value="delete" onclick="return confirm('Delete selected configurations?')" class="rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold hover:bg-red-500">Delete</button>
+                        </div>
+                    </div>
+
+                    <div id="configList" class="space-y-4">
+                        {% for config in configs %}
+                        <details class="config-card rounded-2xl border {% if config.is_active %}border-emerald-500/30 bg-slate-900/80{% else %}border-slate-700 bg-slate-950/70 opacity-75{% endif %} p-4" data-search="{{ config.remark }} {{ config.group_name }} {{ config.protocol }} {{ config.config_link }}" data-group="{{ config.group_name }}" data-status="{% if config.is_active %}active{% else %}inactive{% endif %}">
+                            <summary class="flex cursor-pointer list-none flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div class="flex min-w-0 items-center gap-3">
+                                    <input form="bulkForm" type="checkbox" name="selected_ids" value="{{ config.id }}" onclick="event.stopPropagation()" class="h-5 w-5 rounded border-slate-600 bg-slate-950 text-cyan-500">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <h3 class="truncate text-base font-bold text-white">{{ config.remark }}</h3>
+                                            <span class="rounded-full bg-indigo-500/15 px-2.5 py-1 text-xs font-semibold text-indigo-200">{{ config.protocol }}</span>
+                                            <span class="rounded-full {% if config.is_active %}bg-emerald-500/15 text-emerald-200{% else %}bg-slate-700 text-slate-300{% endif %} px-2.5 py-1 text-xs font-semibold">{% if config.is_active %}Active{% else %}Inactive{% endif %}</span>
+                                            <span class="rounded-full bg-cyan-500/15 px-2.5 py-1 text-xs font-semibold text-cyan-200">{{ config.group_name }}</span>
+                                            {% if config.last_check_status %}
+                                            <span class="rounded-full {% if config.last_check_status == 'Online' %}bg-emerald-500/15 text-emerald-200{% elif config.last_check_status == 'Offline' %}bg-red-500/15 text-red-200{% else %}bg-amber-500/15 text-amber-200{% endif %} px-2.5 py-1 text-xs font-semibold">
+                                                {{ config.last_check_status }}{% if config.last_latency_ms %} · {{ config.last_latency_ms }}ms{% endif %}
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                        <p class="mt-1 truncate font-mono text-xs text-slate-500" dir="ltr">{{ config.config_link }}</p>
+                                        {% if config.last_checked_at %}<p class="mt-1 text-[11px] text-slate-600">Last checked: {{ config.last_checked_at }}</p>{% endif %}
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 text-sm text-slate-400">
+                                    <span>Edit details</span>
+                                    <span class="chevron transition">⌄</span>
+                                </div>
+                            </summary>
+
+                            <div class="mt-5 grid gap-5 lg:grid-cols-[1fr_170px]">
+                                <form action="/edit/{{ config.id }}" method="POST" class="space-y-3">
+                                    <div class="grid gap-3 md:grid-cols-2">
+                                        <div>
+                                            <label class="mb-1 block text-xs text-slate-400">Panel Remark</label>
+                                            <input type="text" name="remark" value="{{ config.remark }}" required class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                                        </div>
+                                        <div>
+                                            <label class="mb-1 block text-xs text-slate-400">Group</label>
+                                            <input type="text" name="group_name" list="groupList" value="{{ config.group_name }}" class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-xs text-slate-400">Config Internal Remark</label>
+                                        <input type="text" name="config_remark" value="{{ config.link_remark }}" placeholder="Leave empty to remove #remark" class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-white outline-none focus:border-cyan-400">
+                                    </div>
+                                    <div>
+                                        <label class="mb-1 block text-xs text-slate-400">Config Link</label>
+                                        <textarea name="config_link" required rows="4" class="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-sm text-white outline-none focus:border-cyan-400" dir="ltr">{{ config.config_link }}</textarea>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="submit" class="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold hover:bg-sky-500">Save Changes</button>
+                                        <button type="button" onclick="copyHidden('configText{{ config.id }}')" class="rounded-xl bg-slate-700 px-4 py-2 text-sm font-semibold hover:bg-slate-600">Copy Config</button>
+                                        <a href="/check/{{ config.id }}" class="rounded-xl bg-cyan-600 px-4 py-2 text-sm font-semibold hover:bg-cyan-500">Check Latency</a>
+                                        <a href="/toggle/{{ config.id }}" class="rounded-xl {% if config.is_active %}bg-amber-600 hover:bg-amber-500{% else %}bg-emerald-600 hover:bg-emerald-500{% endif %} px-4 py-2 text-sm font-semibold">{% if config.is_active %}Disable{% else %}Enable{% endif %}</a>
+                                        <a href="/delete/{{ config.id }}" onclick="return confirm('Delete this configuration?')" class="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-500">Delete</a>
+                                    </div>
+                                </form>
+                                <div class="flex flex-col items-center justify-start gap-3">
+                                    <div class="rounded-2xl bg-white p-3">
+                                        <img src="/qr/config/{{ config.id }}" alt="Config QR {{ config.remark }}" class="h-36 w-36">
+                                    </div>
+                                    <span class="text-xs font-semibold text-slate-400">Config QR</span>
+                                </div>
+                                <input id="configText{{ config.id }}" type="hidden" value="{{ config.config_link }}">
+                            </div>
+                        </details>
+                        {% endfor %}
+
+                        {% if not configs %}
+                        <div class="rounded-3xl border border-dashed border-slate-700 p-12 text-center text-slate-500">No configurations have been added yet.</div>
+                        {% endif %}
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <datalist id="groupList">
+        {% for group in groups %}<option value="{{ group }}"></option>{% endfor %}
+    </datalist>
+
     <script>
-        function copyLink() {
-            var copyText = document.getElementById("subUrl");
-            copyText.select();
-            navigator.clipboard.writeText(copyText.value);
-            alert("Subscription URL copied to clipboard!");
+        function copyValue(id) {
+            const input = document.getElementById(id);
+            input.select();
+            navigator.clipboard.writeText(input.value);
+            showToast('Copied');
         }
+
+        function copyHidden(id) {
+            const input = document.getElementById(id);
+            navigator.clipboard.writeText(input.value);
+            showToast('Configuration copied');
+        }
+
+        function setAllCheckboxes(checked) {
+            document.querySelectorAll('input[name="selected_ids"]').forEach((box) => {
+                const card = box.closest('.config-card');
+                if (!card || !card.classList.contains('hidden')) box.checked = checked;
+            });
+        }
+
+        function filterCards() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const group = document.getElementById('groupFilter').value;
+            const status = document.getElementById('statusFilter').value;
+
+            document.querySelectorAll('.config-card').forEach((card) => {
+                const matchesSearch = card.dataset.search.toLowerCase().includes(search);
+                const matchesGroup = group === 'all' || card.dataset.group === group;
+                const matchesStatus = status === 'all' || card.dataset.status === status;
+                card.classList.toggle('hidden', !(matchesSearch && matchesGroup && matchesStatus));
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-6 right-6 z-50 rounded-xl bg-slate-800 px-4 py-3 text-sm font-semibold text-white shadow-2xl border border-white/10';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 1800);
+        }
+
+        document.getElementById('searchInput').addEventListener('input', filterCards);
+        document.getElementById('groupFilter').addEventListener('change', filterCards);
+        document.getElementById('statusFilter').addEventListener('change', filterCards);
     </script>
 </body>
 </html>

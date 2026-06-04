@@ -1,468 +1,396 @@
-# V2Ray Subscription Link Documentation
+# Subscription System Documentation
+
+This document explains how subscriptions work in the V2Ray Subscription Management Panel.
+
+---
 
 ## Overview
 
-The subscription link is a standardized format used by V2Ray clients to automatically fetch and manage multiple server configurations. This document explains how the subscription system works in this V2Ray Subscription Manager.
+A subscription link is an HTTP endpoint that returns a Base64-encoded list of proxy configurations. V2Ray-compatible clients can fetch this URL periodically and update their server list automatically.
+
+This panel supports:
+
+- One global subscription link
+- Separate subscription links per group
+- QR codes for global, group, and individual config links
+- Only active configs in subscription output
+- Multiple supported protocols
 
 ---
 
-## What is a Subscription Link?
+## Subscription Endpoints
 
-A subscription link is a URL that returns a **base64-encoded** list of V2Ray configurations. V2Ray clients (like V2RayNG, Clash, etc.) can:
-- Add the subscription link once
-- Automatically fetch all available server configurations
-- Update configurations periodically
-- Switch between servers without manual configuration
+### Global Subscription
 
----
-
-## Subscription Link Format
-
-### Endpoint
+```http
+GET /sub
 ```
+
+Returns all active configurations from all groups.
+
+Example URL:
+
+```text
 http://your-server:8000/sub
 ```
 
-### Output Format
+### Group Subscription
 
-The `/sub` endpoint returns a **base64-encoded string** containing all stored configurations.
-
-**Example output:**
-```
-dmxlc3M6Ly9hYmMxMjNkZWY0NTZAZXhhbXBsZS5jb206NDQzP3BhdGg9JTJGd3Mmc2VjdXJpdHk9dGxzI0dlcm1hbnktU2VydmVyCnZtZXNzOi8vZXlBaVlXUmtJam9nSW1WNFlXMXdiR1V1WTI5dElpd2dJbllpT2lBaU1pSWdmUT09I1VTLVNlcnZlcg==
+```http
+GET /sub/group/{group_name}
 ```
 
-When decoded, it becomes:
+Returns only active configurations from a specific group.
+
+Example URLs:
+
+```text
+http://your-server:8000/sub/group/Default
+http://your-server:8000/sub/group/Germany
+http://your-server:8000/sub/group/Gaming
 ```
-vless://abc123def456@example.com:443?path=%2Fws&security=tls#Germany-Server
-vmess://eyAiYWRkIjogImV4YW1wbGUuY29tIiwgInYiOiAiMiIgfQ==#US-Server
+
+If a group name contains spaces or special characters, it is URL-encoded in the generated dashboard link.
+
+Example:
+
+```text
+Group name: Premium Servers
+URL: /sub/group/Premium%20Servers
 ```
 
 ---
 
-## How It Works
+## QR Code Endpoints
 
-### Step 1: Store Configurations in Dashboard
+### Global Subscription QR
 
-```
-1. Open http://localhost:8000
-2. Log in with credentials (admin / admin123)
-3. Add new configurations:
-   - Remark: "Germany - Server 1"
-   - Config Link: "vless://abc123def456@example.com:443?..."
-4. Click "Save Configuration"
+```http
+GET /qr/sub
 ```
 
-### Step 2: Generate Subscription URL
+Returns a PNG QR code for the global subscription URL.
 
-The application automatically:
-1. **Retrieves** all stored configs from the database
-2. **Merges** them with newline separators (`\n`)
-3. **Encodes** the result in base64
-4. **Returns** the encoded string via `/sub` endpoint
+### Group Subscription QR
 
-```
-Database:
-├─ vless://... (Germany)
-├─ vmess://... (US)
-└─ ss://...    (Singapore)
-        ↓
-    Merge with \n
-        ↓
-    Base64 encode
-        ↓
-    HTTP Response: dmxlc3M6Ly8...
+```http
+GET /qr/sub/group/{group_name}
 ```
 
-### Step 3: V2Ray Client Processes It
+Returns a PNG QR code for the group subscription URL.
 
+### Individual Config QR
+
+```http
+GET /qr/config/{config_id}
 ```
-1. Add subscription URL: http://your-server:8000/sub
-2. Client fetches the base64 string
-3. Client decodes it to get all configs
-4. Client displays all available servers
-5. User can switch between servers
-6. Client periodically updates the subscription
+
+Returns a PNG QR code for one config link.
+
+---
+
+## Output Format
+
+The subscription response is plain text containing a Base64-encoded string.
+
+Content-Type:
+
+```http
+text/plain
 ```
+
+The decoded content is a newline-separated list of config links:
+
+```text
+vless://uuid@example.com:443?security=tls#Germany
+vmess://base64payload#US
+ss://method:password@example.com:8388#Singapore
+```
+
+The encoded response looks like:
+
+```text
+dmxlc3M6Ly91dWlkQGV4YW1wbGUuY29tOjQ0Mz9zZWN1cml0eT10bHMjR2VybWFueQp2bWVzczovL2Jhc2U2NHBheWxvYWQjVVMKc3M6Ly9tZXRob2Q6cGFzc3dvcmRAZXhhbXBsZS5jb206ODM4OCNTaW5nYXBvcmU=
+```
+
+---
+
+## How the Panel Builds a Subscription
+
+For `/sub`:
+
+1. Read configs from SQLite
+2. Keep only configs where `is_active = 1`
+3. Join config links using newline separators
+4. Base64 encode the joined text
+5. Return the encoded result as `text/plain`
+
+For `/sub/group/{group_name}`:
+
+1. Decode the group name from the URL
+2. Read configs where:
+   - `is_active = 1`
+   - `group_name = requested group`
+3. Join config links using newline separators
+4. Base64 encode the result
+5. Return it as `text/plain`
+
+---
+
+## Active vs Inactive Configs
+
+Only active configs are included in subscription output.
+
+| Status | Included in `/sub` | Included in group subscription |
+|---|---:|---:|
+| Active | Yes | Yes, if group matches |
+| Inactive | No | No |
+
+This allows you to keep configs in the panel without exposing them to clients.
+
+---
+
+## Groups
+
+Each config has a `group_name` field.
+
+Groups are used for:
+
+- Filtering configs in the dashboard
+- Creating separated subscription links
+- Organizing configs by location, usage, customer, or profile
+
+Example group strategy:
+
+| Group | Purpose |
+|---|---|
+| `Default` | General configs |
+| `Germany` | Germany servers only |
+| `Gaming` | Low-latency configs |
+| `Backup` | Backup configs |
+| `Mobile` | Mobile client configs |
 
 ---
 
 ## Supported Protocols
 
-The subscription system supports all major V2Ray protocols:
+The panel accepts configs that start with one of these prefixes:
 
-| Protocol | Format | Example |
-|----------|--------|---------|
-| VLESS | `vless://` | `vless://user@host:port#remark` |
-| VMESS | `vmess://` | `vmess://base64-config#remark` |
-| Shadowsocks | `ss://` | `ss://method:password@host:port#remark` |
-| ShadowsocksR | `ssr://` | `ssr://host:port:protocol#remark` |
-| Trojan | `trojan://` | `trojan://password@host:port#remark` |
+| Protocol | Prefix | Example |
+|---|---|---|
+| VLESS | `vless://` | `vless://uuid@example.com:443#Server` |
+| VMESS | `vmess://` | `vmess://base64payload#Server` |
+| Shadowsocks | `ss://` | `ss://method:password@example.com:8388#Server` |
+| ShadowsocksR | `ssr://` | `ssr://base64payload` |
+| Trojan | `trojan://` | `trojan://password@example.com:443#Server` |
 
 ---
 
-## API Endpoints
+## Internal Config Remark
 
-### 1. Get Subscription (Public)
+Many config links use a remark after `#`:
+
+```text
+vless://uuid@example.com:443?security=tls#Germany-1
+```
+
+The dashboard supports editing this internal remark separately from the panel remark.
+
+- `Panel Remark`: display name inside the web panel
+- `Config Internal Remark`: the `#remark` inside the config link
+
+If `Config Internal Remark` is left empty while saving, the `#remark` part is removed from the config link.
+
+---
+
+## Multi-Config Import
+
+The add form supports multiple configs at once.
+
+Paste one config per line:
+
+```text
+vless://uuid1@example.com:443#Germany-1
+vless://uuid2@example.com:443#Germany-2
+trojan://password@example.com:443#Trojan-1
+```
+
+The selected group is applied to all imported configs.
+
+If multiple configs are inserted with one panel remark, the app appends a number to each panel remark:
+
+```text
+Germany 1
+Germany 2
+Germany 3
+```
+
+---
+
+## Bulk Host/IP Replacement
+
+The dashboard can replace the host/IP for selected configs.
+
+Supported behavior:
+
+| Protocol | Replacement behavior |
+|---|---|
+| VLESS | Replaces URL hostname |
+| Trojan | Replaces URL hostname |
+| Shadowsocks | Replaces URL hostname |
+| VMESS | Replaces the `add` field in decoded JSON |
+| SSR | Replaces host in decoded SSR payload |
+
+This is useful when several configs share the same backend server and only the domain or IP changes.
+
+---
+
+## Latency Check
+
+The dashboard supports checking config reachability.
+
+Routes:
+
 ```http
-GET /sub
+GET /check/{config_id}
+GET /check-all
 ```
 
-**Response:**
-- Content-Type: `text/plain`
-- Body: Base64-encoded configuration list
+The check performs a TCP connection attempt to the parsed `host:port`.
 
-**Example:**
-```bash
-curl http://localhost:8000/sub
-```
+Stored values:
 
-**Output:**
-```
-dmxlc3M6Ly9hYmMxMjNkZWY0NTZAZXhhbXBsZS5jb206NDQzP3BhdGg9JTJGd3Mmc2VjdXJpdHk9dGxzI0dlcm1hbnktU2VydmVyCnZtZXNzOi8vZXlBaVlXUmtJam9nSW1WNFlXMXdiR1V1WTI5dElpd2dJbllpT2lBaU1pSWdmUT09I1VTLVNlcnZlcg==
-```
+- Status
+- Latency in milliseconds
+- Last checked timestamp
 
-### 2. Dashboard (Protected)
+Possible statuses:
+
+| Status | Meaning |
+|---|---|
+| `Online` | TCP connection succeeded |
+| `Offline` | TCP connection failed or timed out |
+| `Invalid host/port` | Host or port could not be parsed |
+
+Important note:
+
+> This is not a full V2Ray protocol test. It only checks whether the target host and port can accept a TCP connection.
+
+---
+
+## Backup and Restore
+
+Routes:
+
 ```http
-GET /
+GET /backup
+POST /restore
 ```
-- Requires HTTP Basic Authentication
-- Returns HTML dashboard
-- Lists all stored configurations
 
-### 3. Add Configuration (Protected)
-```http
-POST /add
+### Backup
+
+`GET /backup` creates and downloads a copy of the SQLite database.
+
+Backup files are also stored under:
+
+```text
+data/backups/
 ```
-- Requires HTTP Basic Authentication
-- Form parameters:
-  - `remark`: Server location/name (required)
-  - `config_link`: Configuration link (required, must start with protocol)
 
-**Example:**
+### Restore
+
+`POST /restore` accepts a multipart uploaded `.db` file using field name:
+
+```text
+backup_file
+```
+
+Before replacing the current database, the app automatically saves a pre-restore backup:
+
+```text
+data/backups/before-restore-YYYYMMDD-HHMMSS.db
+```
+
+---
+
+## Client Examples
+
+### V2RayNG
+
+1. Open V2RayNG
+2. Go to subscriptions
+3. Add one of the generated URLs:
+   - Global: `http://your-server:8000/sub`
+   - Group: `http://your-server:8000/sub/group/Germany`
+4. Refresh the subscription
+5. Select a server
+
+### Clash-style profile reference
+
+```yaml
+proxy-providers:
+  my-v2ray-subscription:
+    type: http
+    url: "http://your-server:8000/sub"
+    interval: 3600
+    path: ./providers/my-v2ray-subscription.yaml
+```
+
+Compatibility depends on the client and whether it supports raw V2Ray URI subscriptions.
+
+### Command Line Decode Test
+
 ```bash
-curl -X POST http://admin:admin123@localhost:8000/add \
-  -d "remark=Germany Server 1" \
-  -d "config_link=vless://abc123@example.com:443#Germany"
+curl http://localhost:8000/sub | base64 -d
 ```
 
-### 3. Delete Configuration (Protected)
-```http
-GET /delete/{config_id}
-```
-- Requires HTTP Basic Authentication
-- Deletes configuration by ID
+Group subscription:
 
-**Example:**
 ```bash
-curl http://admin:admin123@localhost:8000/delete/1
+curl http://localhost:8000/sub/group/Default | base64 -d
 ```
 
 ---
 
-## Base64 Encoding/Decoding
+## Security Notes
 
-### What is Base64?
-
-Base64 is a binary-to-text encoding scheme. It converts binary data into ASCII string format.
-
-**Why use it?**
-- Safe transmission over HTTP/text protocols
-- Compatible with all V2Ray clients
-- Prevents accidental modifications
-- Compresses configuration text
-
-### Encoding Example
-
-**Plain text (3 configs):**
-```
-vless://abc123@host1.com:443#Server1
-vmess://def456@host2.com:10000#Server2
-ss://method:pass@host3.com:8388#Server3
-```
-
-**Base64 encoded:**
-```
-dmxlc3M6Ly9hYmMxMjNAaG9zdDEuY29tOjQ0MyNTZXJ2ZXIxCnZtZXNzOi8vZGVmNDU2QGhvc3QyLmNvbToxMDAwMCNTZXJ2ZXIyCnNzOi8vbWV0aG9kOnBhc3NAaG9zdDMuY29tOjgzODgjU2VydmVyMw==
-```
-
-### Python Example
-
-```python
-import base64
-
-# Encoding
-configs = "vless://abc@host:443#Server1\nvmess://def@host:10000#Server2"
-encoded = base64.b64encode(configs.encode()).decode()
-print(encoded)
-# Output: dmxlc3M6Ly9hYmNAaG9zdDo0NDMjU2VydmVyMQp2bWVzczovL2RlZkBob3N0OjEwMDAwI1NlcnZlcjI=
-
-# Decoding
-decoded = base64.b64decode(encoded).decode()
-print(decoded)
-# Output: vless://abc@host:443#Server1
-#         vmess://def@host:10000#Server2
-```
-
----
-
-## How V2Ray Clients Use Subscriptions
-
-### V2RayNG (Android/iOS)
-
-1. Open app → "Subscription" tab
-2. Tap "+" to add subscription
-3. Enter subscription URL:
-   ```
-   http://your-server:8000/sub
-   ```
-4. Tap "Add"
-5. Refresh to fetch configurations
-6. Select a server and connect
-
-### Clash (Windows/Mac/Linux)
-
-1. Open Clash config
-2. Add subscription profile:
-   ```yaml
-   - name: "My V2Ray Servers"
-     type: http
-     url: "http://your-server:8000/sub"
-     interval: 3600
-   ```
-3. Update proxies
-4. Select a server
-
-### V2Ray Core (Command Line)
-
-1. Fetch subscription:
-   ```bash
-   curl http://your-server:8000/sub | base64 -d
-   ```
-
-2. Add to `config.json` outbound array
-
----
-
-## Security Considerations
-
-### Public Access
-- **`/sub` endpoint is publicly accessible** (by design)
-- Anyone can fetch the subscription list
-- Configuration links are exposed in base64 (not encrypted)
-
-### Dashboard Protection
-- Dashboard (`/`) requires HTTP Basic Authentication
-- Only authenticated users can add/delete configurations
-- Credentials: Set via environment variables `ADMIN_USERNAME` and `ADMIN_PASSWORD`
-
-### Recommendations
-
-1. **Use HTTPS** in production
-   ```bash
-   # Set up reverse proxy with SSL (nginx, Caddy, etc.)
-   ```
-
-2. **Change default credentials**
-   ```bash
-   # Edit docker-compose.yml or set environment variables
-   ADMIN_USERNAME=your-username
-   ADMIN_PASSWORD=your-strong-password
-   ```
-
-3. **Firewall the dashboard**
-   ```bash
-   # Only expose /sub endpoint publicly
-   # Restrict dashboard to trusted IPs
-   ```
-
-4. **Monitor subscriptions**
-   - Log who accesses `/sub`
-   - Track configuration changes
-   - Audit database queries
-
----
-
-## Configuration Validation
-
-The system automatically validates configuration links:
-
-### Accepted Protocols
-- ✅ `vless://`
-- ✅ `vmess://`
-- ✅ `ss://`
-- ✅ `ssr://`
-- ✅ `trojan://`
-
-### Validation Rules
-- Config link must start with one of the above protocols
-- Empty remarks are rejected
-- Whitespace is automatically trimmed
-
-### Error Handling
-
-**Invalid config attempt:**
-```bash
-curl -X POST http://admin:admin123@localhost:8000/add \
-  -d "remark=Test" \
-  -d "config_link=http://invalid.com"
-  
-# Response: 400 Bad Request
-# Detail: "Invalid config link format. Must start with vless://, vmess://, ss://, ssr://, or trojan://"
-```
+- Dashboard routes require HTTP Basic Authentication.
+- Subscription URLs are public by design for client compatibility.
+- Base64 is not encryption.
+- Use HTTPS in production.
+- Change the default credentials.
+- Keep database backups secure because they contain full proxy configs.
 
 ---
 
 ## Troubleshooting
 
-### Issue: V2Ray client shows "empty subscription"
+### The subscription is empty
 
-**Cause:** No configurations added to dashboard
+Check:
 
-**Solution:**
-1. Log in to dashboard at `http://localhost:8000`
-2. Add at least one configuration
-3. Refresh subscription in V2Ray client
+- At least one config exists
+- Configs are active
+- You are using the correct group URL
+- Group name is URL-encoded if it contains spaces
 
----
+### A config does not appear in a group subscription
 
-### Issue: Client can't decode subscription
+Check:
 
-**Cause:** Server returned invalid base64
+- The config is active
+- The config has the expected group name
+- The group name in the URL matches exactly
 
-**Solution:**
-```bash
-# Test endpoint directly
-curl http://localhost:8000/sub
+### QR code opens the wrong link
 
-# Verify base64 is valid
-curl http://localhost:8000/sub | base64 -d
-```
+Regenerate/reload the dashboard and verify the displayed URL.
 
----
+### Latency check fails
 
-### Issue: "Invalid credentials" error
+Possible causes:
 
-**Cause:** Wrong dashboard username/password
-
-**Solution:**
-1. Check environment variables in `docker-compose.yml`
-2. Default: `admin` / `admin123`
-3. Try: `curl -u admin:admin123 http://localhost:8000/`
-
----
-
-### Issue: Configuration not appearing in subscription
-
-**Cause:** Configuration stored but not returned
-
-**Solution:**
-1. Check database:
-   ```bash
-   docker exec v2ray_sub_panel sqlite3 data/configs.db "SELECT * FROM v2ray_configs;"
-   ```
-2. Verify configuration format
-3. Check server logs:
-   ```bash
-   docker logs v2ray_sub_panel
-   ```
-
----
-
-## API Usage Examples
-
-### cURL Examples
-
-**Get subscription:**
-```bash
-curl http://localhost:8000/sub
-```
-
-**Add configuration:**
-```bash
-curl -X POST http://admin:admin123@localhost:8000/add \
-  -d "remark=My Server" \
-  -d "config_link=vless://user@example.com:443?path=%2Fws&security=tls#MyServer"
-```
-
-**Delete configuration:**
-```bash
-curl http://admin:admin123@localhost:8000/delete/1
-```
-
-**Get dashboard:**
-```bash
-curl -u admin:admin123 http://localhost:8000/
-```
-
----
-
-### Python Examples
-
-**Fetch and decode subscription:**
-```python
-import requests
-import base64
-
-url = "http://localhost:8000/sub"
-response = requests.get(url)
-
-if response.status_code == 200:
-    decoded = base64.b64decode(response.text).decode()
-    configs = decoded.split('\n')
-    for config in configs:
-        print(config)
-```
-
-**Add configuration:**
-```python
-import requests
-
-data = {
-    "remark": "Germany Server",
-    "config_link": "vless://abc123@example.com:443#Germany"
-}
-
-auth = ("admin", "admin123")
-response = requests.post("http://localhost:8000/add", data=data, auth=auth)
-print(response.status_code)
-```
-
----
-
-## Performance Notes
-
-- Subscription list size depends on number of stored configurations
-- Each configuration link is ~50-200 bytes
-- Base64 encoding increases size by ~33%
-- Response time: < 100ms for typical use cases
-
-**Example:**
-```
-10 configurations × 150 bytes = 1.5 KB
-Base64 encoded = 2 KB
-Network transfer = ~2ms (on good connection)
-```
-
----
-
-## Summary
-
-| Aspect | Details |
-|--------|---------|
-| **Format** | Base64-encoded newline-separated configs |
-| **Endpoint** | `GET /sub` (public) |
-| **Update** | Real-time (fetches from DB each time) |
-| **Clients** | V2RayNG, Clash, V2Ray Core, etc. |
-| **Speed** | ~100ms per request |
-| **Security** | HTTP Basic Auth for dashboard |
-| **Protocols** | VLESS, VMESS, SS, SSR, Trojan |
-
----
-
-## Further Reading
-
-- [V2Ray Official Documentation](https://www.v2fly.org/)
-- [V2RayNG GitHub](https://github.com/2dust/v2rayNG)
-- [Clash Documentation](https://clashofclans.github.io/)
-- [Base64 Encoding](https://en.wikipedia.org/wiki/Base64)
+- Host/port cannot be parsed
+- Server is offline
+- Firewall blocks the connection
+- The config uses an unsupported or unusual URI format
